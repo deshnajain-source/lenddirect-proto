@@ -3,6 +3,8 @@
 // each step builds on the conversation before it; each ticket is implemented in a fresh one.
 
 export type Stage = "grill" | "spec" | "tickets" | "implement";
+// A review runs after each ticket is implemented, in its own Claude session. It is not a step the user moves to.
+export type TurnKind = Stage | "review";
 
 export const SPEC_FILE = "SPEC.md";
 export const ISSUES_DIR = "issues";
@@ -17,7 +19,7 @@ const BASE_RULES = `You are running behind a web UI, not a terminal.
   - Tickets are published as ${ISSUES_DIR}/<NN>-<slug>.md using the local ticket template.
   - The \`ready-for-agent\` triage label is recorded as the **Status:** line.`;
 
-const STAGE_RULES: Record<Stage, string> = {
+const STAGE_RULES: Record<TurnKind, string> = {
   grill: `- There is no existing codebase; the working directory only holds the docs you write. Do not dispatch sub-agents.
 - When the frontier is empty, do not use the ❓ format: summarise the shared understanding and ask the user to confirm it.
 - When a decision meets the ADR criteria, write the ADR straight away.`,
@@ -28,7 +30,12 @@ const STAGE_RULES: Record<Stage, string> = {
 - Once the user approves, write the ticket files without asking anything further.`,
   implement: `- Nobody can answer questions during this step. Make reasonable decisions within the ticket and note them in your summary.
 - Write all application code and tests under ${APP_DIR}/. The working directory is its own git repository; commit there.
-- Finish with a short summary: what was built, test results, review findings, and the commit.`,
+- Skip the code-review step of /implement: a separate review runs on your commit once you finish.
+- Finish with a short summary: what was built, test results, and the commit.`,
+  review: `- Nobody can answer questions during this step. Do not edit any files: report only.
+- The spec for this review is the ticket file passed to you, with ${SPEC_FILE} as its parent spec. Do not look for issue references.
+- There is no coding standards file; GLOSSARY.md is the documented standard, on top of the smell baseline.
+- Finish with the aggregated report: the ## Standards and ## Spec sections and the one-line summary.`,
 };
 
 interface StageConfig {
@@ -39,25 +46,34 @@ interface StageConfig {
 
 const NO_SHELL = ["AskUserQuestion", "Bash", "Agent", "Task", "WebFetch", "WebSearch"];
 
-export const STAGE_CONFIG: Record<Stage, StageConfig> = {
+export const STAGE_CONFIG: Record<TurnKind, StageConfig> = {
   grill: { skills: ["grill-with-docs", "grilling", "domain-modeling"], disallowedTools: NO_SHELL },
   spec: { skills: ["to-spec", "domain-modeling"], disallowedTools: NO_SHELL },
   tickets: { skills: ["to-tickets", "domain-modeling"], disallowedTools: NO_SHELL },
-  // Implementing needs a shell for tests, typechecks and commits, and sub-agents for code-review.
+  // Implementing needs a shell for tests, typechecks and commits. Code review is left out: the review turn runs it.
   implement: {
-    skills: ["implement", "tdd", "code-review", "codebase-design"],
+    skills: ["implement", "tdd", "codebase-design"],
     disallowedTools: ["AskUserQuestion", "WebFetch", "WebSearch"],
+    allowedTools: ["Bash"],
+  },
+  // Reviewing needs a shell for git diff and sub-agents for its two axes, but must not change the code.
+  review: {
+    skills: ["code-review"],
+    disallowedTools: ["AskUserQuestion", "WebFetch", "WebSearch", "Write", "Edit", "NotebookEdit"],
     allowedTools: ["Bash"],
   },
 };
 
-export const systemRules = (stage: Stage) => `${BASE_RULES}\n${STAGE_RULES[stage]}`;
+export const systemRules = (stage: TurnKind) => `${BASE_RULES}\n${STAGE_RULES[stage]}`;
 
 export const START_PROMPT: Record<Exclude<Stage, "grill">, (arg: string) => string> = {
   spec: () => `/to-spec`,
   tickets: () => `/to-tickets ${SPEC_FILE}`,
   implement: (ticket) => `/implement ${ticket}`,
 };
+
+// Reviews what one ticket changed since the commit it started from, against the ticket itself.
+export const REVIEW_PROMPT = (base: string, ticket: string) => `/code-review ${base} ${ticket}`;
 
 // Sent when the user clicks the step's approve button. Each one finishes the step's
 // output so the step ends with its files written, instead of another request for confirmation.

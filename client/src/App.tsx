@@ -283,6 +283,14 @@ export default function App() {
                     </div>
                   </article>
                 )}
+                {turn.review && (
+                  <article className="card message">
+                    <div className="label">Code review</div>
+                    <div className="markdown">
+                      <Markdown>{turn.review}</Markdown>
+                    </div>
+                  </article>
+                )}
                 <TicketBoard tickets={tickets} onImplement={implement} />
               </>
             )}

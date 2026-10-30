@@ -14,6 +14,8 @@ export interface Turn {
   questions: Question[]
   outro: string
   raw: string
+  // The /code-review report on a ticket that was just implemented.
+  review?: string
   done?: boolean
 }
 

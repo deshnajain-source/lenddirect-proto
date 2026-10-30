@@ -18,8 +18,8 @@ export function TicketBoard({ tickets, onImplement }: Props) {
         </span>
       </header>
       <p className="muted">
-        Each ticket runs <code>/implement</code> in a fresh Claude session: tests first, then code, then a review,
-        then a commit in this session's folder.
+        Each ticket runs <code>/implement</code> in a fresh Claude session: tests first, then code, then a commit in
+        this session's folder. Then <code>/code-review</code> reviews that commit against the ticket in its own session.
       </p>
       <ul className="tickets">
         {tickets.map((t) => (

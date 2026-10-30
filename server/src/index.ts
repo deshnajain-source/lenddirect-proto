@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { runTurn } from "./grill.js";
-import { APP_DIR, CONFIRM_PROMPT, ISSUES_DIR, SPEC_FILE, START_PROMPT, type Stage } from "./stages.js";
+import { APP_DIR, CONFIRM_PROMPT, ISSUES_DIR, REVIEW_PROMPT, SPEC_FILE, START_PROMPT, type Stage } from "./stages.js";
 import { parseTurn, type Question } from "./rounds.js";
 import { BRIEF_FILE, summarisePreviousSessions } from "./history.js";
 
@@ -28,13 +28,14 @@ app.use(cors());
 app.use(express.json());
 
 // Each turn streams newline-delimited JSON: status updates, then a final `turn` or `error`.
-// Implementing a ticket runs in a fresh Claude session; every other step resumes the shared one.
+// Implementing a ticket runs in a fresh Claude session, then /code-review runs on it in another;
+// every other step resumes the shared one.
 async function streamTurn(
   res: Response,
   id: string,
   session: GrillingSession,
   prompt: string,
-  opts: { confirmed?: boolean; ticket?: string } = {},
+  opts: { confirmed?: boolean; ticket?: { path: string; base: string } } = {},
 ) {
   res.setHeader("Content-Type", "application/x-ndjson");
   const send = (obj: unknown) => res.write(JSON.stringify(obj) + "\n");
@@ -50,9 +51,20 @@ async function streamTurn(
       onEvent: send,
     });
     if (stage !== "implement") session.claudeSessionId = sessionId;
-    if (opts.ticket) session.implemented.add(opts.ticket);
+    let review: string | undefined;
+    if (opts.ticket) {
+      send({ type: "status", text: "Reviewing the ticket with /code-review…" });
+      ({ text: review } = await runTurn({
+        stage: "review",
+        cwd: session.dir,
+        prompt: REVIEW_PROMPT(opts.ticket.base, opts.ticket.path),
+        readDirs: [SESSIONS_DIR],
+        onEvent: send,
+      }));
+      session.implemented.add(opts.ticket.path);
+    }
     const done = await isStageDone(session, opts.confirmed ?? false);
-    send({ type: "turn", sessionId: id, stage, ...parseTurn(text), raw: text, done });
+    send({ type: "turn", sessionId: id, stage, ...parseTurn(text), raw: text, review, done });
   } catch (err) {
     send({ type: "error", message: err instanceof Error ? err.message : String(err) });
   } finally {
@@ -126,7 +138,8 @@ app.get("/api/sessions/:id/tickets", async (req, res) => {
   res.json(await listTickets(session));
 });
 
-// Implements one ticket with /implement, in its own Claude session, committing to the session folder's repo.
+// Implements one ticket with /implement, in its own Claude session, committing to the session folder's repo,
+// then reviews what it changed with /code-review.
 app.post("/api/sessions/:id/implement", async (req, res) => {
   const session = sessions.get(req.params.id);
   if (!session) return res.status(404).json({ error: "Unknown session" });
@@ -134,8 +147,10 @@ app.post("/api/sessions/:id/implement", async (req, res) => {
   const ticket = (await listTickets(session)).find((t) => t.path === req.body?.ticket);
   if (!ticket) return res.status(400).json({ error: "Unknown ticket" });
   session.stage = "implement";
-  await ensureGitRepo(session.dir);
-  await streamTurn(res, req.params.id, session, START_PROMPT.implement(ticket.path), { ticket: ticket.path });
+  const base = await prepareRepo(session.dir);
+  await streamTurn(res, req.params.id, session, START_PROMPT.implement(ticket.path), {
+    ticket: { path: ticket.path, base },
+  });
 });
 
 app.get("/api/sessions/:id/docs", async (req, res) => {
@@ -176,12 +191,21 @@ async function makeSessionDir(brief: string): Promise<string> {
 }
 
 // The session folder sits inside this project's repo, so it gets its own repo for /implement to commit to.
-async function ensureGitRepo(dir: string) {
-  if (await exists(join(dir, ".git"))) return;
-  const git = promisify(execFile);
-  await git("git", ["init", "-q"], { cwd: dir });
-  await writeFile(join(dir, ".gitignore"), "node_modules/\ndist/\n");
+// Returns the commit the ticket starts from, which the review diffs against. The docs become the first commit.
+async function prepareRepo(dir: string): Promise<string> {
+  if (!(await exists(join(dir, ".git")))) {
+    await git(dir, "init", "-q");
+    await writeFile(join(dir, ".gitignore"), "node_modules/\ndist/\n");
+  }
+  const head = await git(dir, "rev-parse", "--verify", "-q", "HEAD").catch(() => "");
+  if (head) return head;
+  await git(dir, "add", "-A");
+  await git(dir, "commit", "-q", "-m", "Add spec, glossary and tickets");
+  return git(dir, "rev-parse", "HEAD");
 }
+
+const execFileAsync = promisify(execFile);
+const git = async (cwd: string, ...args: string[]) => (await execFileAsync("git", args, { cwd })).stdout.trim();
 
 interface Ticket {
   path: string;

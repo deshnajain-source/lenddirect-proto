@@ -1,5 +1,5 @@
 import { query } from "@anthropic-ai/claude-agent-sdk";
-import { STAGE_CONFIG, systemRules, type Stage } from "./stages.js";
+import { STAGE_CONFIG, systemRules, type TurnKind } from "./stages.js";
 
 // Runs one turn of a step through Claude Code with the user's installed skills.
 // The session folder is the working directory, so every doc and the app land there.
@@ -7,7 +7,7 @@ import { STAGE_CONFIG, systemRules, type Stage } from "./stages.js";
 export type TurnEvent = { type: "status"; text: string };
 
 export async function runTurn(opts: {
-  stage: Stage;
+  stage: TurnKind;
   cwd: string;
   prompt: string;
   resume?: string;
