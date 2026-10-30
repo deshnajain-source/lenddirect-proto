@@ -1,0 +1,8 @@
+{
+  "name": "grill-with-docs-ui",
+  "private": true,
+  "scripts": {
+    "install:all": "npm --prefix server install && npm --prefix client install",
+    "dev": "npm --prefix server run dev & npm --prefix client run dev"
+  }
+}
