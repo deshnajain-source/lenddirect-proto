@@ -142,3 +142,34 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .doc-body { font-size: 0.9rem; }
 .doc-body h1 { font-size: 1.2rem; }
 .doc-body h2 { font-size: 1rem; }
+
+.label { font-size: 0.75rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; color: var(--accent); }
+
+.stepper { list-style: none; padding: 0; margin: 0 0 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.stepper li { display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--surface); opacity: 0.6; }
+.stepper li.current { opacity: 1; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.stepper li.done { opacity: 1; }
+.stepper .dot { flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; font-size: 0.8rem; font-weight: 600; background: var(--border); }
+.stepper .current .dot, .stepper .done .dot { background: var(--accent); color: var(--accent-text); }
+.stepper strong { display: block; font-size: 0.9rem; }
+.stepper small { display: block; color: var(--muted); font-size: 0.75rem; line-height: 1.35; }
+.brief .stepper { margin-bottom: 8px; }
+@media (max-width: 720px) {
+  .stepper { grid-template-columns: repeat(2, 1fr); }
+  .stepper small { display: none; }
+}
+
+.working { justify-items: stretch; padding: 24px; }
+.working-head { display: flex; gap: 16px; align-items: center; }
+.working-head p { margin: 2px 0 0; color: var(--text); }
+.activity { list-style: none; margin: 0; padding: 12px 0 0 44px; border-top: 1px solid var(--border); display: grid; gap: 4px; font-size: 0.85rem; color: var(--muted); }
+.activity li::before { content: "✓ "; color: var(--accent); }
+
+.tickets { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.tickets li { display: flex; align-items: center; gap: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.tickets li > div { flex: 1; min-width: 0; }
+.tickets small { display: block; color: var(--muted); font-size: 0.8rem; }
+.tickets li.next { border-color: var(--accent); background: var(--accent-soft); }
+.tickets li.done { opacity: 0.65; }
+.ticket-num { flex: none; width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; font-weight: 600; font-size: 0.85rem; background: var(--border); }
+.tickets .done .ticket-num { background: var(--accent); color: var(--accent-text); }

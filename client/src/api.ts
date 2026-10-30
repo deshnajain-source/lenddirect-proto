@@ -5,17 +5,29 @@ export interface Question {
   recommendation: string
 }
 
+export type Stage = 'grill' | 'spec' | 'tickets' | 'implement'
+
 export interface Turn {
   sessionId: string
+  stage: Stage
   intro: string
   questions: Question[]
   outro: string
   raw: string
+  done?: boolean
 }
 
 export interface Answer {
   question: Question
   answer: string
+}
+
+export interface Ticket {
+  path: string
+  number: string
+  title: string
+  blockedBy: string
+  done: boolean
 }
 
 export interface Doc {
@@ -68,9 +80,23 @@ export const sendAnswers = (sessionId: string, answers: Answer[], onStatus: (t: 
 export const sendMessage = (sessionId: string, message: string, onStatus: (t: string) => void) =>
   streamTurn(`/api/sessions/${sessionId}/reply`, { message }, onStatus)
 
+export const confirmSession = (sessionId: string, onStatus: (t: string) => void) =>
+  streamTurn(`/api/sessions/${sessionId}/confirm`, {}, onStatus)
+
 export async function fetchDocs(sessionId: string): Promise<Doc[]> {
   const res = await fetch(`/api/sessions/${sessionId}/docs`)
   return res.ok ? res.json() : []
 }
 
 export const docsDownloadUrl = (sessionId: string) => `/api/sessions/${sessionId}/docs.md`
+
+export const startStage = (sessionId: string, stage: 'spec' | 'tickets', onStatus: (t: string) => void) =>
+  streamTurn(`/api/sessions/${sessionId}/stage`, { stage }, onStatus)
+
+export const implementTicket = (sessionId: string, ticket: string, onStatus: (t: string) => void) =>
+  streamTurn(`/api/sessions/${sessionId}/implement`, { ticket }, onStatus)
+
+export async function fetchTickets(sessionId: string): Promise<Ticket[]> {
+  const res = await fetch(`/api/sessions/${sessionId}/tickets`)
+  return res.ok ? res.json() : []
+}
